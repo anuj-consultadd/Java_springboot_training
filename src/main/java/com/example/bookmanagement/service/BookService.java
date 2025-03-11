@@ -1,9 +1,9 @@
-// This class contains business logic like validation, conversion, and error handling.
-
 package com.example.bookmanagement.service;
 
 import com.example.bookmanagement.dto.BookDTO;
 import com.example.bookmanagement.entity.Book;
+import com.example.bookmanagement.exception.BadRequestException;
+import com.example.bookmanagement.exception.ResourceNotFoundException;
 import com.example.bookmanagement.mapper.BookMapper;
 import com.example.bookmanagement.repository.BookRepository;
 import com.example.bookmanagement.dto.ResponseDTO;
@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.NoSuchElementException;
 
 @Service
 public class BookService {
@@ -33,10 +32,10 @@ public class BookService {
                 .collect(Collectors.toList());
     }
 
-    // Retrieve a book by its ID, using Java's built-in NoSuchElementException
+    // Retrieve a book by its ID, using custom ResourceNotFoundException
     public BookDTO getBookById(Long id) {
         Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Book not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", id));
         return BookMapper.toDTO(book);
     }
 
@@ -60,6 +59,14 @@ public class BookService {
     // Create a new book entry in the database
     @Transactional
     public BookDTO createBook(BookDTO bookDTO) {
+        // Add validation if needed
+        if (bookDTO.getTitle() == null || bookDTO.getTitle().trim().isEmpty()) {
+            throw new BadRequestException("Book title cannot be empty");
+        }
+        if (bookDTO.getAuthor() == null || bookDTO.getAuthor().trim().isEmpty()) {
+            throw new BadRequestException("Book author cannot be empty");
+        }
+
         Book book = BookMapper.toEntity(bookDTO);
         Book savedBook = bookRepository.save(book);
         return BookMapper.toDTO(savedBook);
@@ -69,7 +76,15 @@ public class BookService {
     @Transactional
     public BookDTO updateBook(Long id, BookDTO bookDTO) {
         Book existingBook = bookRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Book not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", id));
+
+        // Add validation if needed
+        if (bookDTO.getTitle() == null || bookDTO.getTitle().trim().isEmpty()) {
+            throw new BadRequestException("Book title cannot be empty");
+        }
+        if (bookDTO.getAuthor() == null || bookDTO.getAuthor().trim().isEmpty()) {
+            throw new BadRequestException("Book author cannot be empty");
+        }
 
         // Update book properties
         existingBook.setTitle(bookDTO.getTitle());
@@ -84,15 +99,21 @@ public class BookService {
     @Transactional
     public BookDTO patchBook(Long id, BookDTO bookDTO) {
         Book existingBook = bookRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Book not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", id));
 
         boolean updated = false;
 
         if (bookDTO.getTitle() != null) {
+            if (bookDTO.getTitle().trim().isEmpty()) {
+                throw new BadRequestException("Book title cannot be empty");
+            }
             existingBook.setTitle(bookDTO.getTitle());
             updated = true;
         }
         if (bookDTO.getAuthor() != null) {
+            if (bookDTO.getAuthor().trim().isEmpty()) {
+                throw new BadRequestException("Book author cannot be empty");
+            }
             existingBook.setAuthor(bookDTO.getAuthor());
             updated = true;
         }
@@ -102,7 +123,7 @@ public class BookService {
         }
 
         if (!updated) {
-            throw new IllegalArgumentException("At least one field must be updated.");
+            throw new BadRequestException("At least one field must be updated");
         }
 
         Book updatedBook = bookRepository.save(existingBook);
@@ -112,7 +133,7 @@ public class BookService {
     @Transactional
     public ResponseDTO deleteBook(Long id) {
         if (!bookRepository.existsById(id)) {
-            throw new NoSuchElementException("Book not found with id: " + id);
+            throw new ResourceNotFoundException("Book", "id", id);
         }
         bookRepository.deleteById(id);
         return new ResponseDTO("Book with ID " + id + " has been successfully deleted.");
